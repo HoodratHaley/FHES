@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.5.0/build/index.js"></script>
+    <title>Excel Invoice Cleaner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Upload Invoice File</h2>
+<input type="file" id="fileUpload" accept=".xlsx" />
+<button onclick="processFile()">Process File</button>
+<button onclick="downloadWord()">Download Word</button>
+    <h2 id="clientName"></h2>
+    <h3 id="clinicName"></h3>
+    <div id="clientAddress">
+    </div>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Claim Number</th>
+                <th>Service Date</th>
+                <th>Procedure (and Codes)</th>
+                <th>Units</th>
+                <th>Unit Rate</th>
+                <th>Total Charge</th>
+                <th>Patient Charge</th>
+                <th>Total Paid</th>
+                <th>Insurance Paid</th>
+                <th>Patient Paid</th>
+                <th>Total Adjustment</th>
+                <th>Total Balance</th>
+                <th>Insurance Balance</th>
+                <th>Balance Owed</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+        </table>
+    <h2>Disclaimer: if you have any questions please call 1234567</h2>
+<script>
+let sortedData = [];
+let clientName = "";
+let balanceOwed = 0; // ✅ Define globally
+let formattedAddressLines = []; // ✅ Global address storage
+
+
+function processFile() {
+    const file = document.getElementById('fileUpload').files[0];
+    if (!file) {
+        alert("Please select a file first.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+        // Extract Client Name correctly from row containing "Client Name(s):"
+let clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
+clientName = clientNameRow ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0] : "[CLIENT NAME]";
+document.getElementById('clientName').innerText = clientName;
+
+// ✅ Reformat clientName to "Firstname Lastname"
+if (clientName.includes(',')) {
+    let parts = clientName.split(',');
+    clientName = `${parts[1].trim()} ${parts[0].trim()}`;
+}
+
+document.getElementById('clientName').innerText = clientName;
+
+// Extract Client Address accurately (starting after client's name)
+let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 2;
+let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
+    .map(row => row[0]?.replace("Family Health Education Services", "")
+                       .replace("930 North 10th St", "")
+                       .trim())
+    .filter(line => line && line.length > 0 && !line.includes(clientName));
+
+// Properly define streetLine and cityStateZipLine
+formattedAddressLines = rawAddressLines; // Update global variable
+let streetLine = formattedAddressLines[0] || '';
+let cityStateZipLine = formattedAddressLines[1] || '';
+
+// Populate HTML clearly
+document.getElementById('clientAddress').innerHTML = `
+    <p>${streetLine}</p>
+    <p>${cityStateZipLine}</p>
+`;
+
+        // ✅ Clean up whitespace and hidden characters
+        jsonData = jsonData.map(row => row.map(cell => 
+            typeof cell === 'string' 
+                ? cell.replace(/[\r\n\t]+/g, ' ').trim() 
+                : cell
+        ));
+
+        console.log("Extracted Data (Cleaned):", JSON.stringify(jsonData, null, 2));
+        // ✅ Find the starting row based on actual content
+        const tableStartIndex = jsonData.findIndex(row =>
+            row[0] &&
+            (row[0].includes('CL-') || row[0].includes('Service Line#'))
+        );
+
+        if (tableStartIndex === -1) {
+            alert("Invalid file format. Could not find claim numbers or service lines.");
+            return;
+        }
+
+        // ✅ Extract all valid rows
+        sortedData = jsonData
+            .slice(tableStartIndex)
+            .filter(row => row[0] &&
+                (row[0].includes('CL-') || row[0].includes('Service Line#'))
+            );
+
+        extractData(sortedData);
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+function formatDate(date) {
+    if (!date) return '';
+    return date.replace(/-/g, '/'); 
+}
+
+function extractData(rows) {
+    const tableBody = document.querySelector('#dataTable tbody');
+    tableBody.innerHTML = '';
+    balanceOwed = 0; // ✅ Reset balance owed
+
+    rows.forEach(row => {
+        if (!row[0]) return;
+
+        let isClaimRow = row[0].includes('CL-');
+        let isServiceLineRow = row[0].includes('Service Line#');
+
+        let fields = row[0].match(/(\d{2}\/\d{2}\/\d{4}|\d+|\$[\d,]+\.\d{2}|\w.*?)(?=\s+\d{2}\/|\s+\$|\s+\d|\s*$)/g) || [];
+
+        let claimOrServiceLine = isClaimRow ? fields[0] : `${fields[0]} ${fields[1]}`;
+        let serviceDate = isClaimRow ? fields[1] : fields[2];
+
+        let procedureCode = isClaimRow ? null : fields[3];
+        let procedureDescription = isClaimRow ? null : fields[4];
+
+        if (!isClaimRow && procedureDescription) {
+            let match = procedureDescription.match(/(.*?)(\d+)$/);
+            if (match) {
+                procedureDescription = match[1].trim();
+                fields[5] = match[2];
+            }
+        }
+
+        let units = isClaimRow ? fields[4] : fields[5];
+        let unitRate = isClaimRow ? null : fields[6];
+        let totalCharge = isClaimRow ? fields[6] : (isServiceLineRow ? null : fields[7]);
+
+        if (!isClaimRow) {
+            if (!isNaN(parseFloat(units)) && fields[6] && !fields[6].startsWith('$')) {
+                unitRate = fields[5];
+                totalCharge = fields[6];
+            } else if (fields[5] && fields[5].startsWith('$')) {
+                unitRate = fields[6];
+                totalCharge = fields[7];
+            }
+        }
+
+        let patientCharge = isClaimRow ? fields[7] : (isServiceLineRow ? null : fields[8]);
+        let totalPaid = isClaimRow ? fields[8] : (isServiceLineRow ? null : fields[9]);
+        let insurancePaid = isClaimRow ? fields[9] : (isServiceLineRow ? null : fields[10]);
+        let patientPaid = isClaimRow ? fields[10] : (isServiceLineRow ? null : fields[11]);
+        let adjustment = isClaimRow ? fields[11] : (isServiceLineRow ? null : fields[12]);
+        let totalBalance = isClaimRow ? fields[12] : (isServiceLineRow ? null : fields[13]);
+        let insuranceBalance = isClaimRow ? fields[13] : (isServiceLineRow ? null : fields[14]);
+        let balanceOwedRow = isClaimRow ? fields[14] : (isServiceLineRow ? null : fields[15]);
+
+        if (balanceOwedRow) {
+            balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
+        }
+
+        tableBody.innerHTML += `
+            <tr>
+                <td>${claimOrServiceLine || ''}</td>
+                <td>${formatDate(serviceDate) || ''}</td>
+                <td>${procedureCode ? `${procedureCode} - ${procedureDescription}` : ''}</td>
+                <td>${units || ''}</td>
+                <td>${unitRate || ''}</td>
+                <td>${totalCharge || ''}</td>
+                <td>${patientCharge || ''}</td>
+                <td>${totalPaid || ''}</td>
+                <td>${insurancePaid || ''}</td>
+                <td>${patientPaid || ''}</td>
+                <td>${adjustment || ''}</td>
+                <td>${totalBalance || ''}</td>
+                <td>${insuranceBalance || ''}</td>
+                <td>${balanceOwedRow || ''}</td>
+            </tr>
+        `;
+    });
+}
+function downloadWord() {
+    const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, TextRun, AlignmentType, BorderStyle, PageOrientation } = docx;
+
+    const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+
+    const tableHeader = new TableRow({
+        children: Array.from(document.querySelectorAll('#dataTable thead th')).map(th =>
+            new TableCell({
+                children: [
+                    new Paragraph({
+                        children: [new TextRun({ text: th.innerText, bold: true, size: 18 })],
+                        alignment: AlignmentType.CENTER
+                    }),
+                ],
+                shading: { fill: 'D3D3D3' }
+            })
+        )
+    });
+
+    const tableBody = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(row =>
+        new TableRow({
+            children: Array.from(row.querySelectorAll('td')).map(cell =>
+                new TableCell({
+                    children: [
+                        new Paragraph({
+                            children: [new TextRun({ text: cell.innerText || '', size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        }),
+                    ],
+                })
+            )
+        })
+    );
+
+    const totalRow = new TableRow({
+        children: [
+            ...Array(13).fill(new TableCell({
+                children: [new Paragraph({ text: "" })],
+                shading: { fill: 'D3D3D3' }
+            })),
+            new TableCell({
+                children: [new Paragraph({ children: [new TextRun({ text: "Total", bold: true, size: 18 })] })],
+                shading: { fill: 'D3D3D3' }
+            }),
+            new TableCell({
+                children: [new Paragraph({ children: [new TextRun({ text: `$${balanceOwed.toFixed(2)}`, bold: true, size: 18 })] })],
+                shading: { fill: 'D3D3D3' }
+            })
+        ]
+    });
+
+    const doc = new Document({
+        sections: [{
+            properties: {
+                page: {
+                    size: { orientation: PageOrientation.PORTRAIT },
+                    margin: { top: 360, bottom: 360, left: 360, right: 360 } // ≈0.25-inch margins (minimal, printer-friendly)
+        }
+            },
+            children: [
+                // Statement Date centered
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 540 }, // 
+                }),
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 22 }),
+                    ],
+                    spacing: { after: 200 }
+                }),
+
+                // PAY THIS AMOUNT centered
+                new Table({
+                    alignment: AlignmentType.CENTER,
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                    rows: [new TableRow({
+                        children: [new TableCell({
+                            children: [new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({ text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`, bold: true, size: 24 }),
+                                ],
+                            })],
+                            borders: {
+                                top: { style: BorderStyle.SINGLE, size: 6 },
+                                bottom: { style: BorderStyle.SINGLE, size: 6 },
+                                left: { style: BorderStyle.SINGLE, size: 6 },
+                                right: { style: BorderStyle.SINGLE, size: 6 }
+                            },
+                        })],
+                    })],
+                }),
+                // Add spacing of 3/8 of an inch before the client name
+new Paragraph({
+    alignment: AlignmentType.LEFT,
+    spacing: { after: 540 }, // 3/8 inch = 540 twips
+}),
+
+                // Client Name bold, size 12
+            new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                    new TextRun({ text: clientName, size: 24, bold: true }),
+                    ],
+                }),
+
+                // Street Address bold, size 12
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                        new TextRun({ text: formattedAddressLines[0], size: 24, bold: true }),
+                    ],
+                }),
+
+                // City, State, ZIP bold, size 12
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                        new TextRun({ text: formattedAddressLines[1], size: 24, bold: true }),
+                    ],
+                }),
+// Add spacing of 0.4 inches before the client name
+new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 540 }, // 
+                }),
+                // Invoice Table
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [tableHeader, ...tableBody, totalRow],
+                }),
+            ],
+        }],
+    });
+
+    Packer.toBlob(doc).then(blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${clientName}_invoice.docx`;
+        link.click();
+        URL.revokeObjectURL(url);
+    });
+}
+</script>
+</body>
+</html>
