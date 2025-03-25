@@ -1,0 +1,690 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Sheet</title> 
+<style>
+
+  /* Basic Reset */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  /* General Body Style */
+  body {
+    font-family: Arial, sans-serif;
+    max-width: 1500px;
+    margin: 0 auto;
+    background-color: #acdbf9;     /* Light blue background */
+    color: #333;
+    padding-top: 50px;
+  }
+/* Back Home Button */
+.back-home {
+  display: inline-block;
+  padding: 12px 24px;
+  background-color: #f8c9f9;
+  color: #333;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid #000;
+  top: 20px;
+  left: 20px;
+  z-index: 999; /* Ensures it stays above other elements */
+  transition: background-color 0.2s ease;
+}
+
+.back-home:hover {
+  background-color: #e8b3e8;
+}
+.thead {
+    text-align: center;
+    padding: 15px;  
+}
+  /* Container for Left-Aligned Layout */
+  .container {
+    width: 100%;
+    max-width: 1500px;
+    background-color: #acdbf9;     /* Light blue background */
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(233, 208, 218, 0.1); /* Optional shadow */
+  }
+
+  /* Left Side - Price Sheet (2/3 of the screen) */
+  .left-side {
+    flex: 1;
+    padding-right: 20px;
+    margin-right: 35%;           /* Pushes content left to make space for .right-side */
+  }
+
+  /* Right Side - Itemized List and Grand Total (Fixed Position) */
+  .right-side {
+    width: 30%;                 /* Adjust width to fit content */
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #f8c9f9;
+    text-align: left;
+    font-size: 1rem;
+    color: #333;
+    position: fixed;            /* Fixed position to keep it on screen */
+    top: 20px;                  /* Distance from the top */
+    right: 10px;                /* Distance from the right edge of the screen */
+  }
+
+  /* Price Button Styling */
+  .price-button {
+    display: inline-block;
+    padding: 0.5rem 1.5rem;
+    background-color: #f8c9f9;
+    border: 1px solid #000;
+    border-radius: 20px;
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 5px;
+  }
+  .price-button:hover {
+    background-color: #e8b8e8;    /* Slightly darker pink */
+  }
+
+  /* Table Styling */
+  table {
+    width: 100%;
+    border-collapse: collapse;   /* Ensures borders are clean */
+    background-color: #acdbf9;     /* Light blue background */
+    border: 2px solid #333;        /* Solid border to match your style */
+    border-radius: 8px;            /* Rounded corners */
+    overflow: hidden;              /* Ensures rounded corners apply properly */
+    margin: 20px 0;               /* Spacing on top/bottom */
+  }
+
+  /* Table Rows */
+  tr {
+    border: 2px solid #333;        /* Border around each row */
+  }
+
+  /* Table Cells */
+  th,
+  td {
+    text-align: center;
+    padding: 15px;
+    background-color: #acdbf9;     /* Same as table background */
+    color: #333;
+  }
+
+  /* Table Header */
+  th {
+    background-color: #f8c9f9;
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 5px;
+  }
+th:first-child,
+td:first-child {
+    background-color: #f8c9f9; /* Soft pink */
+    font-weight: bold;
+
+}
+  /* CPT Code Styling */
+  .cpt-code {
+    font-size: 0.8rem;
+    color: #333;
+    margin-top: 0.3rem;
+    display: block;
+    font-style: italic;
+  }
+
+  /* Itemized List Styling */
+  .itemized-list {
+    margin-bottom: 20px;
+    font-size: 1rem;
+    background-color: #f8c9f9;
+  }
+
+  /* Remove Button Styling */
+  .remove-button {
+    background-color: #f8c9f9;
+    border: 1px solid #000;
+    border-radius: 5px;
+    padding: 2px 5px;
+    cursor: pointer;
+    margin-right: 5px;
+    font-weight: bold;
+  }
+
+  /* Multiple Button Styling */
+  .multiple-button {
+    background-color: #f8c9f9;
+    border: 1px solid #000;
+    border-radius: 5px;
+    padding: 2px 5px;
+    cursor: pointer;
+    margin-left: 5px;
+    font-weight: bold;
+  }
+  .multiple-button:hover {
+    background-color: #f7bdf7;
+  }
+</style>
+</head>
+<body>
+    <a href="index.html" class="back-home">Back to Home</a>
+
+    
+    <div class="container">
+       <h1>Price Sheet</h1> <!-- Left Side -->    <div style="margin-bottom: 20px;">
+        <label for="percentSelector">Select Fee Percentage:</label>
+        <select id="percentSelector" onchange="updateVisibleColumn()">
+            <option value="100">100%</option>
+            <option value="75">75%</option>
+            <option value="50">50%</option>
+            <option value="25">25%</option>
+        </select>
+    </div>
+        <div class="left-side">
+            <!-- Services/Procedures Table -->
+            <table id="Services/Procedures" class="price-table">
+                <thead>
+                    <tr>
+                        <th>Services/Procedure</th>
+                        <th>100% Fee</th>
+                
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="service-name"><strong>Limited-New</strong></span><span class="cpt-code">99202</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Limited-New" data-price="170" onclick="addToTotal('Limited-New', 170)">$170.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Intermediate-New</strong></span><span class="cpt-code">99203</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Intermediate-New" data-price="240" onclick="addToTotal('Intermediate-New', 240)">$240.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Comprehensive-New</strong></span><span class="cpt-code">99204</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Comprehensive-New" data-price="365" onclick="addToTotal('Comprehensive-New', 365)">$365.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Preventive 12-17 New</strong></span><span class="cpt-code">99384</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Preventive 12-17 New" data-price="306" onclick="addToTotal('Preventive 12-17 New', 306)">$306.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Preventive 18-39 New</strong></span><span class="cpt-code">99385</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Preventive 18-39 New" data-price="296" onclick="addToTotal('Preventive 18-39 New', 296)">$296.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Minimal-Established</strong></span><span class="cpt-code">99211</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Minimal-Established" data-price="51" onclick="addToTotal('Minimal-Established', 51)">$51.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Limited-Established</strong></span><span class="cpt-code">99212</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Limited-Established" data-price="101" onclick="addToTotal('Limited-Established', 101)">$101.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Intermediate-Established</strong></span><span class="cpt-code">99213</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Intermediate-Established" data-price="166" onclick="addToTotal('Intermediate-Established', 166)">$166.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Comprehensive-Established</strong></span><span class="cpt-code">99214</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Comprehensive-Established" data-price="243" onclick="addToTotal('Comprehensive-Established', 243)">$243.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Preventive 12-17 Established</strong></span><span class="cpt-code">99394</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Preventive 12-17 Established" data-price="262" onclick="addToTotal('Preventive 12-17 Established', 262)">$262.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Preventive 18-39 Established</strong></span><span class="cpt-code">99395</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Preventive 18-39 Established" data-price="267" onclick="addToTotal('Preventive 18-39 Established', 267)">$267.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Preventive 40-64 Established</strong></span><span class="cpt-code">99396</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Preventive 40-64 Established" data-price="285" onclick="addToTotal('Preventive 40-64 Established', 285)">$285.00</button>
+                        </td>
+                    </tr>
+                    
+
+            <!-- Procedures Table -->
+            <table id="procedures" class="price-table">
+                <thead>
+                    <tr>
+                        <th>Procedure</th>
+                        <th>100% Fee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="service-name"><strong>IUD Insertion</strong></span><span class="cpt-code">58300</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="IUD Insertion" data-price="178" onclick="addToTotal('IUD Insertion', 178)">$178.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>IUD Removal</strong></span><span class="cpt-code">58301</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="IUD Removal" data-price="211" onclick="addToTotal('IUD Removal', 211)">$211.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Female Genital Wart Treatment</strong></span><span class="cpt-code">56501</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Female Genital Wart Treatment" data-price="323" onclick="addToTotal('Female Genital Wart Treatment', 323)">$323.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Male Genital Wart Treatment</strong></span><span class="cpt-code">54050</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Male Genital Wart Treatment" data-price="300" onclick="addToTotal('Male Genital Wart Treatment', 300)">$300.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Injection Fee</strong></span><span class="cpt-code">96372</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Injection Fee" data-price="38" onclick="addToTotal('Injection Fee', 38)">$38.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Implant Insertion</strong></span><span class="cpt-code">11981</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Implant Insertion" data-price="316" onclick="addToTotal('Implant Insertion', 316)">$316.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Implant Removal</strong></span><span class="cpt-code">11982</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Implant Removal" data-price="349" onclick="addToTotal('Implant Removal', 349)">$349.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Implant Insertion/Removal</strong></span><span class="cpt-code">11983</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Implant Insertion/Removal" data-price="478" onclick="addToTotal('Implant Insertion/Removal', 478)">$478.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Vasectomy</strong></span><span class="cpt-code">55250</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Vasectomy" data-price="847" onclick="addToTotal('Vasectomy', 847)">$847.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Venipuncture</strong></span><span class="cpt-code">36415</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Venipuncture" data-price="7" onclick="addToTotal('Venipuncture', 7)">$7.00</button>
+                        </td>
+                    </tr>
+                                   
+                </tbody>
+            </table>
+
+            <!-- Labs Table -->
+            <table id="Labs" class="price-table">
+                <thead>
+                    <tr>
+                        <th>Labs</th>
+                        <th>100% Fee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="service-name"><strong>Chlamydia</strong></span><span class="cpt-code">87491</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Chlamydia" data-price="15" onclick="addToTotal('Chlamydia', 15)">$15.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Gonorrhea</strong></span><span class="cpt-code">87591</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Gonorrhea" data-price="15" onclick="addToTotal('Gonorrhea', 15)">$15.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>HerpesViralCulture</strong></span><span class="cpt-code">87254</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="HerpesViralCulture" data-price="39" onclick="addToTotal('HerpesViralCulture', 39)">$39.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Syphilis-TPPA</strong></span><span class="cpt-code">86593</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Syphilis-TPPA" data-price="35" onclick="addToTotal('Syphilis-TPPA', 35)">$35.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>RPRQualitative</strong></span><span class="cpt-code">86592</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="RPRQualitative" data-price="20" onclick="addToTotal('RPRQualitative', 20)">$20.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>HIVRapid</strong></span><span class="cpt-code">86703</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="HIVRapid" data-price="40" onclick="addToTotal('HIVRapid', 40)">$40.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>HIVSerum</strong></span><span class="cpt-code">87389</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="HIVSerum" data-price="22" onclick="addToTotal('HIVSerum', 22)">$22.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>HPVTest</strong></span><span class="cpt-code">87624</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="HPVTest" data-price="52" onclick="addToTotal('HPVTest', 52)">$52.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>PapConventional</strong></span><span class="cpt-code">88164</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="PapConventional" data-price="23" onclick="addToTotal('PapConventional', 23)">$23.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Pap Liquid Base</strong></span><span class="cpt-code">88142</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Pap Liquid Base" data-price="30" onclick="addToTotal('Pap Liquid Base', 30)">$30.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Pathology Interpretation</strong></span><span class="cpt-code">88141</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Pathology Interpretation" data-price="72" onclick="addToTotal('Pathology Interpretation', 72)">$72.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>UrinePregnancyTest</strong></span><span class="cpt-code">81025</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="UrinePregnancyTest" data-price="20" onclick="addToTotal('UrinePregnancyTest', 20)">$20.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>UADipstick</strong></span><span class="cpt-code">81002</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="UADipstick" data-price="8" onclick="addToTotal('UADipstick', 8)">$8.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>UA Dip Automated</strong></span><span class="cpt-code">81003</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="UA Dip Automated" data-price="10" onclick="addToTotal('UA Dip Automated', 10)">$10.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>WetMount/GramStain</strong></span><span class="cpt-code">87210</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="WetMount/GramStain" data-price="15" onclick="addToTotal('WetMount/GramStain', 15)">$15.00</button>
+                        </td>
+                    </tr>                    
+                </tbody>
+            </table>
+
+            <!-- Supplies Table -->
+            <table id="Supplies" class="price-table">
+                <thead>
+                    <tr>
+                        <th>Supplies</th>
+                        <th>100% Fee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="service-name"><strong>Basal Thermometer</strong></span><span class="cpt-code">A4931</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Basal Thermometer" data-price="16" onclick="addToTotal('Basal Thermometer', 16)">$16.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>DepoProvera</strong></span><span class="cpt-code">J1050</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="DepoProvera" data-price="27" onclick="addToTotal('DepoProvera', 27)">$27.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>MedroxyProgesterone</strong></span><span class="cpt-code">J1050</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="MedroxyProgesterone" data-price="27" onclick="addToTotal('MedroxyProgesterone', 27)">$27.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>VCF Foam</strong></span><span class="cpt-code">A4269</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="VCF Foam" data-price="16" onclick="addToTotal('VCF Foam', 16)">$16.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Gynol II</strong></span><span class="cpt-code">A4269</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Gynol II" data-price="7" onclick="addToTotal('Gynol II', 7)">$7.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>LilettaIUD</strong></span><span class="cpt-code">J7297</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="LilettaIUD" data-price="130" onclick="addToTotal('LilettaIUD', 130)">$130.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>ParagardIUD</strong></span><span class="cpt-code">J7300</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="ParagardIUD" data-price="315" onclick="addToTotal('ParagardIUD', 315)">$315.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Xulane</strong></span><span class="cpt-code">J7304</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Xulane" data-price="75" onclick="addToTotal('Xulane', 75)">$75.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>NuvaRing</strong></span><span class="cpt-code">J7303</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="NuvaRing" data-price="8" onclick="addToTotal('NuvaRing', 8)">$8.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Nexplanon</strong></span><span class="cpt-code">J7307</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Nexplanon" data-price="573" onclick="addToTotal('Nexplanon', 573)">$573.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Alese</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Alese" data-price="5" onclick="addToTotal('Alese', 5)">$5.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Apri</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Apri" data-price="5" onclick="addToTotal('Apri', 5)">$5.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Aubra</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Aubra" data-price="5" onclick="addToTotal('Aubra', 5)">$5.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Aviane</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Aviane" data-price="5" onclick="addToTotal('Aviane', 5)">$5.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Bicillin</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Bicillin" data-price="30" onclick="addToTotal('Bicillin', 30)">$30.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Camila</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Camila" data-price="28" onclick="addToTotal('Camila', 28)">$28.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Ceftriaxone</strong></span><span class="cpt-code">J0696</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Ceftriaxone" data-price="20" onclick="addToTotal('Ceftriaxone', 20)">$20.00</button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><span class="service-name"><strong>Chateal</strong></span><span class="cpt-code">S4993</span></td>
+                        <td colspan="4">
+                            <button class="price-button" data-name="Chateal" data-price="4" onclick="addToTotal('Chateal', 4)">$4.00</button>
+                        </td>
+                    </tr>
+
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Right Side (Itemized List and Grand Total) -->
+        <div class="right-side">
+            <h2>Receipt</h2>
+            <div id="itemizedList" class="itemized-list">
+                <!-- Itemized list of services will appear here -->
+            </div>
+            <h2>Total</h2>
+            <div id="grandTotal">$0.00</div>
+        </div>
+    </div>
+
+    <script>
+        let grandTotal = 0;
+
+        // Function to add items to the selected list
+        function addToTotal(service, price) {
+            const itemizedList = document.getElementById('itemizedList');
+            const listItem = document.createElement('div');
+            listItem.className = 'list-item';
+
+            // Track the total price for this item (including quantity)
+            let totalPrice = price;
+            let quantity = 1;
+
+            // Display the item and its price
+            listItem.textContent = `${service} x${quantity}: $${totalPrice.toFixed(2)}`;
+
+            // Add "Multiple" button for specific items
+            if (isMultipleAllowed(service)) {
+                const multipleButton = document.createElement('button');
+                multipleButton.textContent = "Multiple";
+                multipleButton.className = 'multiple-button';
+                multipleButton.onclick = function () {
+                    const newQuantity = parseInt(prompt("Enter quantity:", quantity), 10);
+                    if (!isNaN(newQuantity) && newQuantity > 0) {
+                        // Update the total price based on the new quantity
+                        grandTotal -= totalPrice; // Remove the old total
+                        quantity = newQuantity;
+                        totalPrice = price * quantity;
+                        grandTotal += totalPrice; // Add the new total
+
+                        // Update the displayed item and total
+                        listItem.textContent = `${service} x${quantity}: $${totalPrice.toFixed(2)}`;
+                        listItem.appendChild(multipleButton);
+                        listItem.appendChild(removeButton);
+                        document.getElementById('grandTotal').textContent = `$${grandTotal.toFixed(2)}`;
+                    }
+                };
+                listItem.appendChild(multipleButton);
+            }
+
+            // Add "Remove" button
+            const removeButton = document.createElement('button');
+            removeButton.textContent = "X";
+            removeButton.className = 'remove-button';
+            removeButton.onclick = function () {
+                itemizedList.removeChild(listItem);
+                grandTotal -= totalPrice; // Subtract the total price (including quantity)
+                document.getElementById('grandTotal').textContent = `$${grandTotal.toFixed(2)}`;
+            };
+
+            listItem.appendChild(removeButton);
+            itemizedList.appendChild(listItem);
+
+            // Update the grand total
+            grandTotal += totalPrice;
+            document.getElementById('grandTotal').textContent = `$${grandTotal.toFixed(2)}`;
+        }
+
+        // Check if the "Multiple" button is allowed for the item
+        function isMultipleAllowed(service) {
+            const allowedItems = [
+                "InternalCondom", "Diaphragm", "DepoProvera", "MedroxyProgesterone",
+                "VCFFoam", "GynolII", "LilettaIUD", "ParagardIUD", "Xulane", "Chlamydia",
+                "Gonorrhea", "NuvaRing", "Nexplanon", "Alese", "Apri", "Aubra", "Aviane",
+                "Bicillin", "Camila", "Ceftriaxone", "Chateal", "Cryselle", "Cyred",
+                "Doxycycline", "Enpresse", "Jolivette", "Levora", "Lutera", "Lyza",
+                "Mononessa", "NorQD", "Nordette", "Norethindrone", "Nortrel777",
+                "Orsythia", "Portia", "Reclipsen", "Sprintec", "Sronyx", "Tri-LoMarzia",
+                "Tri-LoSprintec", "TriNessaLo", "Triphasil", "Trivora", "Vilibra"
+            ];
+            return allowedItems.some(item => service.includes(item));
+        }
+        function updateVisibleColumn() {
+    const selectedPercent = parseFloat(document.getElementById('percentSelector').value) / 100;
+
+    // Get all price buttons
+    const priceButtons = document.querySelectorAll('.price-button');
+
+    priceButtons.forEach(button => {
+        const fullPrice = parseFloat(button.getAttribute('data-price')); // Get 100% price
+        const newPrice = (fullPrice * selectedPercent).toFixed(2);
+
+        // Update the button's text and onclick function based on selected percentage
+        button.textContent = `$${newPrice}`;
+        button.setAttribute('onclick', `addToTotal('${button.getAttribute('data-name')} ${selectedPercent * 100}%', ${newPrice})`);
+    });
+
+    // Update table header to match selected percentage
+    const headerCells = document.querySelectorAll('th');
+    headerCells[1].textContent = `${selectedPercent * 100}% Fee`;
+}
+
+// Initialize prices at 100% on page load
+document.addEventListener('DOMContentLoaded', updateVisibleColumn);
+
+// Initialize the table to only show the 100% column
+document.addEventListener('DOMContentLoaded', () => {
+    updateVisibleColumn();
+});
+
+    </script>
+</body>
+</html>
