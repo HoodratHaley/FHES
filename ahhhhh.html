@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/docx@7.5.0/build/index.js"></script>
+    <script src="libs/xlsx.full.min.js"></script>
+    <script src="scripts/docx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/dist/date-fns.min.js"></script>
     <title>Excel Invoice Cleaner</title>
     <style>
         body {
@@ -37,19 +38,35 @@
         button:hover {
             background-color: #45a049;
         }
+        #loadingBar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
-
 <h2>Upload Invoice File</h2>
 <input type="file" id="fileUpload" accept=".xlsx" />
 <button onclick="processFile()">Process File</button>
-<button onclick="downloadWord()">Download Word</button>
-    <h2 id="clientName"></h2>
-    <h3 id="clinicName"></h3>
-    <div id="clientAddress">
+<div id="loadingBar">
+    <div style="text-align:center;">
+        <div class="spinner" style="margin-bottom:10px; border: 6px solid #f3f3f3; border-top: 6px solid #4CAF50; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;"></div>
+        <p id="loadingMessage" style="font-size:18px;">Processing... please wait</p>
     </div>
-    <table id="dataTable">
+</div>
+<button id="downloadBtn" onclick="downloadWord()" disabled>Download Word</button>
+<h2 id="clientName"></h2>
+<h3 id="clinicName"></h3>
+<div id="clientAddress"></div>
+<table id="dataTable">
         <thead>
             <tr>
                 <th>Claim Number</th>
@@ -70,326 +87,224 @@
         </thead>
         <tbody></tbody>
         </table>
-    <h2>Disclaimer: if you have any questions please call 1234567</h2>
-<script>
-    function styledCell(value) {
-    return `<td style="color: ${value ? 'black' : 'white'}">${value ?? ''}</td>`;
-}
-let sortedData = [];
-let clientName = "";
-let balanceOwed = 0; // ✅ Define globally
-let formattedAddressLines = []; // ✅ Global address storage
-
-
-function processFile() {
-    const file = document.getElementById('fileUpload').files[0];
-    if (!file) {
-        alert("Please select a file first.");
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-        // Extract Client Name correctly from row containing "Client Name(s):"
-let clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
-clientName = clientNameRow ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0] : "[CLIENT NAME]";
-document.getElementById('clientName').innerText = clientName;
-
-// ✅ Reformat clientName to "Firstname Lastname"
-if (clientName.includes(',')) {
-    let parts = clientName.split(',');
-    clientName = `${parts[1].trim()} ${parts[0].trim()}`;
-}
-
-document.getElementById('clientName').innerText = clientName;
-
-// Extract Client Address accurately (starting after client's name)
-let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
-let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
-    .map(row => row[0]?.replace("Family Health Education Services", "")
-                       .replace("930 North 10th St", "")
-                       .trim())
-    .filter(line => line && line.length > 0 && !line.includes(clientName));
-
+    <script>
+        function processFile() {
+            const file = document.getElementById('fileUpload').files[0];
+            document.getElementById('loadingBar').style.display = 'flex';
+            document.getElementById('downloadBtn').disabled = true;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+                // Extract Client Name correctly from row containing "Client Name(s):"
+                let clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
+                let clientName = clientNameRow ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0] : "[CLIENT NAME]";
+                document.getElementById('clientName').innerText = clientName;
+                // ✅ Reformat clientName to "Firstname Lastname"
+                if (clientName.includes(',')) {
+                    let parts = clientName.split(',');
+                    clientName = `${parts[1].trim()} ${parts[0].trim()}`;
+                }
+                // Extract Client Address accurately (starting after client's name)
+                let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
+                let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
+                    .map(row => row[0]?.replace("Family Health Education Services", "")
+                                       .replace("930 North 10th St", "")
+                                       .trim())
+                    .filter(line => line && line.length > 0 && !line.includes(clientName));
 // Properly define streetLine and cityStateZipLine
 formattedAddressLines = rawAddressLines; // Update global variable
-let streetLine = formattedAddressLines[0] || '';
-let cityStateZipLine = formattedAddressLines[1] || '';
+            let streetLine = formattedAddressLines[0] || '';
+            let cityStateZipLine = formattedAddressLines[1] || '';
 
-// Populate HTML clearly
-document.getElementById('clientAddress').innerHTML = `
-    <p>${streetLine}</p>
-    <p>${cityStateZipLine}</p>
-`;
-
-        // ✅ Clean up whitespace and hidden characters
-        jsonData = jsonData.map(row => row.map(cell => 
-            typeof cell === 'string' 
-                ? cell.replace(/[\r\n\t]+/g, ' ').trim() 
-                : cell
-        ));
-
-        console.log("Extracted Data (Cleaned):", JSON.stringify(jsonData, null, 2));
-        // ✅ Find the starting row based on actual content
-        const tableStartIndex = jsonData.findIndex(row =>
-            row[0] &&
-            (row[0].includes('CL-') || row[0].includes('Service Line#'))
-        );
-
-        if (tableStartIndex === -1) {
-            alert("Invalid file format. Could not find claim numbers or service lines.");
-            return;
-        }
-
-        // ✅ Extract all valid rows
-        sortedData = jsonData
-            .slice(tableStartIndex)
-            .filter(row => row[0] &&
+            // Populate HTML clearly
+            document.getElementById('clientAddress').innerHTML = `
+                <p>${streetLine}</p>
+                <p>${cityStateZipLine}</p>
+            `;
+            // ✅ Clean up whitespace and hidden characters
+            jsonData = jsonData.map(row => row.map(cell => 
+                typeof cell === 'string' 
+                    ? cell.replace(/[\r\n\t]+/g, ' ').trim() 
+                    : cell
+            ));
+            console.log("Extracted Data (Cleaned):", JSON.stringify(jsonData, null, 2));
+            // ✅ Find the starting row based on actual content
+            const tableStartIndex = jsonData.findIndex(row =>
+                row[0] &&
                 (row[0].includes('CL-') || row[0].includes('Service Line#'))
             );
+ // ✅ Extract all valid rows
+ sortedData = jsonData
+                .slice(tableStartIndex)
+                .filter(row => row[0] &&
+                    (row[0].includes('CL-') || row[0].includes('Service Line#'))
+                );
+            if (tableStartIndex === -1) {
+                alert("Invalid file format. Could not find claim numbers or service lines.");
+                return;
+            }
+            document.getElementById('loadingBar').style.display = 'none';
+            document.getElementById('downloadBtn').disabled = false; 
+            reader.readAsArrayBuffer(file);
+            }
+        };
+    function extractData(rows) {
+        const tableBody = document.querySelector('#dataTable tbody');
+        tableBody.innerHTML = '';
+        let balanceOwed = 0;
 
-        extractData(sortedData);
-    };
+        rows.forEach((row, index) => {
+            if (!row[0]) return;
 
-    reader.readAsArrayBuffer(file);
-}
+            const isClaimRow = row[0].includes('CL-');
+            const isServiceLineRow = row[0].includes('Service Line#');
+            const fields = row[0].split(/\s{2,}/);
+            const claimOrServiceLine = fields[0];
+            const serviceDate = fields[1];
 
-function formatDate(date) {
-    if (!date) return '';
-    return date.replace(/-/g, '/'); 
-}
-function styledCell(value, forceBlack = false) {
-    const displayValue = value ?? '';
-    const isEmpty = displayValue === '';
-    const color = (forceBlack || !isEmpty) ? 'black' : 'white';
-    return `<td style="color: ${color}">${displayValue}</td>`;
-}
+            let procedure = '';
+            if (!isClaimRow || fields[2]) {
+                const [code, ...descParts] = fields[2]?.split('-') || [];
+                procedure = code && descParts.length ? `${code} - ${descParts.join('-')}`.trim() : '';
+            }
 
-function extractData(rows) {
-    const tableBody = document.querySelector('#dataTable tbody');
-    tableBody.innerHTML = '';
-    balanceOwed = 0;
-
-    rows.forEach((row, index) => {
-        if (!row[0]) return;
-
-        const isClaimRow = row[0].includes('CL-');
-        const isServiceLineRow = row[0].includes('Service Line#');
-
-        const fields = row[0].split(/\s{2,}/);
-
-        const claimOrServiceLine = fields[0];
-        const serviceDate = fields[1];
-
-        // Procedure code + description
-        let procedure = '';
-        if (!isClaimRow || fields[2]) {
-            const [code, ...descParts] = fields[2]?.split('-') || [];
-            procedure = code && descParts.length
-                ? `${code} - ${descParts.join('-')}`.trim()
-                : '';
-        }
-
-        const units = fields[3] || '';
-        const unitRate = fields[4] || '';
-        const totalCharge = fields[5] || '';
-        const patientCharge = fields[6] || '';
-        const totalPaid = fields[7] || '';
-        const insurancePaid = fields[8] || '';
-        const patientPaid = fields[9] || '';
-        const adjustment = fields[10] || '';
-        const totalBalance = fields[11] || '';
-        const insuranceBalance = fields[12] || '';
-        const balanceOwedRow = fields[13] || '';
-
-        if (balanceOwedRow) {
-            balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
-        }
-
-        // 🧠 Look ahead to next row to check for a service line
-        const nextRow = rows[index + 1];
-        const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
-
-        // If claim row and NO service line follows it, treat it like a full row
-        const forceBlack = isClaimRow && !nextHasServiceLine;
-
-        tableBody.innerHTML += `
-            <tr>
-                ${styledCell(claimOrServiceLine, true)}
-                ${styledCell(formatDate(serviceDate), true)}
-                ${styledCell(procedure, forceBlack)}
-                ${styledCell(units, forceBlack)}
-                ${styledCell(unitRate, forceBlack)}
-                ${styledCell(totalCharge, forceBlack)}
-                ${styledCell(patientCharge, forceBlack)}
-                ${styledCell(totalPaid, forceBlack)}
-                ${styledCell(insurancePaid, forceBlack)}
-                ${styledCell(patientPaid, forceBlack)}
-                ${styledCell(adjustment, forceBlack)}
-                ${styledCell(totalBalance, forceBlack)}
-                ${styledCell(insuranceBalance, forceBlack)}
-                ${styledCell(balanceOwedRow, forceBlack)}
-            </tr>`;
-    });
-}
-function downloadWord() {
-    const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, TextRun, AlignmentType, BorderStyle, PageOrientation } = docx;
-
-    const currentDate = new Date().toLocaleDateString('en-US', {
-        year: 'numeric', month: '2-digit', day: '2-digit'
-    });
-
-    const tableHeader = new TableRow({
-        children: Array.from(document.querySelectorAll('#dataTable thead th')).map(th =>
-            new TableCell({
-                children: [
+            const units = fields[3] || '';
+            const unitRate = fields[4] || '';
+            const totalCharge = fields[5] || '';
+            const patientCharge = fields[6] || '';
+            const totalPaid = fields[7] || '';
+            const insurancePaid = fields[8] || '';
+            const patientPaid = fields[9] || '';
+            const adjustment = fields[10] || '';
+            const totalBalance = fields[11] || '';
+            const insuranceBalance = fields[12] || '';
+            const balanceOwedRow = fields[13] || '';
+            if (balanceOwedRow) {
+                balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
+            }
+            const nextRow = rows[index + 1];
+            const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
+            const forceBlack = isClaimRow && !nextHasServiceLine;
+            tableBody.innerHTML += `
+                <tr>
+                    ${styledCell(claimOrServiceLine, true)}
+                    ${styledCell(formatDate(serviceDate), true)}
+                    ${styledCell(procedure, forceBlack)}
+                    ${styledCell(units, forceBlack)}
+                    ${styledCell(unitRate, forceBlack)}
+                    ${styledCell(totalCharge, forceBlack)}
+                    ${styledCell(patientCharge, forceBlack)}
+                    ${styledCell(totalPaid, forceBlack)}
+                    ${styledCell(insurancePaid, forceBlack)}
+                    ${styledCell(patientPaid, forceBlack)}
+                    ${styledCell(adjustment, forceBlack)}
+                    ${styledCell(totalBalance, forceBlack)}
+                    ${styledCell(insuranceBalance, forceBlack)}
+                    ${styledCell(balanceOwedRow, forceBlack)}
+                </tr>`;
+        });
+    }
+    async function downloadWord() {
+        const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, TextRun, AlignmentType, BorderStyle, PageBreak, PageOrientation } = docx;
+        const currentDate = new Date().toLocaleDateString('en-US', {
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        });
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            for (let index = 0; index < workbook.SheetNames.length; index++) {
+                const sheet = workbook.Sheets[workbook.SheetNames[index]];
+                const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                const clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
+                const clientName = clientNameRow ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0] : "[CLIENT NAME]";
+                const addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
+                const rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
+                    .filter(line => line && line.length > 0 && !line.includes(clientName));
+                const tableStartIndex = jsonData.findIndex(row => row[0]?.includes('CL-') || row[0]?.includes('Service Line#'));
+                const dataRows = jsonData
+                    .slice(tableStartIndex)
+                    .filter(row => row[0] && (row[0].includes('CL-') || row[0].includes('Service Line#')));
+                const tableBody = dataRows.map((row, i) => {
+                    const fields = row[0].split(/\s{2,}/);
+                    const isClaimRow = row[0].includes('CL-');
+                    const nextRow = dataRows[i + 1];
+                    const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
+                    const forceBlack = isClaimRow && !nextHasServiceLine;
+                    const claimOrServiceLine = fields[0];
+                    const serviceDate = fields[1];
+                    const procedureField = fields[2] || '';
+                    const [code, ...descParts] = procedureField.split('-');
+                    const procedure = descParts.length ? `${code} - ${descParts.join('-')}`.trim() : '';
+                    const units = fields[3] || '';
+                    const unitRate = fields[4] || '';
+                    const totalCharge = fields[5] || '';
+                    const patientCharge = fields[6] || '';
+                    const totalPaid = fields[7] || '';
+                    const insurancePaid = fields[8] || '';
+                    const patientPaid = fields[9] || '';
+                    const adjustment = fields[10] || '';
+                    const totalBalance = fields[11] || '';
+                    const insuranceBalance = fields[12] || '';
+                    const balanceOwedRow = fields[13] || '';
+                    if (balanceOwedRow) {
+                        balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
+                    }
+                    return new TableRow({
+                        children: [
+                            getCell(claimOrServiceLine),
+                            getCell(serviceDate),
+                            getCell(procedure),
+                            getCell(units),
+                            getCell(unitRate),
+                            getCell(totalCharge),
+                            getCell(patientCharge),
+                            getCell(totalPaid),
+                            getCell(insurancePaid),
+                            getCell(patientPaid),
+                            getCell(adjustment),
+                            getCell(totalBalance),
+                            getCell(insuranceBalance),
+                            getCell(balanceOwedRow)
+                        ]
+                    });
+                });
+                const headerRow = new TableRow({
+                    children: Array.from(document.querySelectorAll('#dataTable thead th')).map(th =>
+                        new TableCell({
+                            children: [new Paragraph({ text: th.innerText, bold: true })],
+                            shading: { fill: 'D3D3D3' }
+                        })
+                    )
+                });
+                const sectionChildren = [
                     new Paragraph({
-                        children: [new TextRun({ text: th.innerText, bold: true, size: 18 })],
-                        alignment: AlignmentType.CENTER
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 22 })],
+                        spacing: { after: 200 }
                     }),
-                ],
-                shading: { fill: 'D3D3D3' }
-            })
-        )
-    });
-
-    const tableBody = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(row =>
-        new TableRow({
-            children: Array.from(row.querySelectorAll('td')).map(cell =>
-                new TableCell({
-                    children: [
-                        new Paragraph({
-                            children: [new TextRun({ text: cell.innerText || '', size: 18 })],
-                            alignment: AlignmentType.CENTER
-                        }),
-                    ],
-                })
-            )
-        })
-    );
-
-    const totalRow = new TableRow({
-        children: [
-            ...Array(13).fill(new TableCell({
-                children: [new Paragraph({ text: "" })],
-                shading: { fill: 'D3D3D3' }
-            })),
-            new TableCell({
-                children: [new Paragraph({ children: [new TextRun({ text: "Total", bold: true, size: 18 })] })],
-                shading: { fill: 'D3D3D3' }
-            }),
-            new TableCell({
-                children: [new Paragraph({ children: [new TextRun({ text: `$${balanceOwed.toFixed(2)}`, bold: true, size: 18 })] })],
-                shading: { fill: 'D3D3D3' }
-            })
-        ]
-    });
-
-    const doc = new Document({
-        sections: [{
-            properties: {
-                page: {
-                    size: { orientation: PageOrientation.PORTRAIT },
-                    margin: { top: 360, bottom: 360, left: 360, right: 360 } // ≈0.25-inch margins (minimal, printer-friendly)
-        }
-            },
-            children: [
-                // Statement Date centered
-                new Paragraph({
-                    alignment: AlignmentType.LEFT,
-                    spacing: { after: 540 }, // 
-                }),
-                new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    children: [
-                        new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 22 }),
-                    ],
-                    spacing: { after: 200 }
-                }),
-
-                // PAY THIS AMOUNT centered
-                new Table({
-                    alignment: AlignmentType.CENTER,
-                    width: { size: 50, type: WidthType.PERCENTAGE },
-                    rows: [new TableRow({
-                        children: [new TableCell({
-                            children: [new Paragraph({
-                                alignment: AlignmentType.CENTER,
-                                children: [
-                                    new TextRun({ text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`, bold: true, size: 24 }),
-                                ],
-                            })],
-                            borders: {
-                                top: { style: BorderStyle.SINGLE, size: 6 },
-                                bottom: { style: BorderStyle.SINGLE, size: 6 },
-                                left: { style: BorderStyle.SINGLE, size: 6 },
-                                right: { style: BorderStyle.SINGLE, size: 6 }
-                            },
-                        })],
-                    })],
-                }),
-                // Add spacing of 3/8 of an inch before the client name
-new Paragraph({
-    alignment: AlignmentType.LEFT,
-    spacing: { after: 540 }, // 3/8 inch = 540 twips
-}),
-
-                // Client Name bold, size 12
-            new Paragraph({
-                    alignment: AlignmentType.LEFT,
-                    spacing: { after: 160 },
-                    indent: { left: 600 },
-                    children: [
-                    new TextRun({ text: clientName, size: 24, bold: true }),
-                    ],
-                }),
-
-                // Street Address bold, size 12
-                new Paragraph({
-                    alignment: AlignmentType.LEFT,
-                    spacing: { after: 160 },
-                    indent: { left: 600 },
-                    children: [
-                        new TextRun({ text: formattedAddressLines[0], size: 24, bold: true }),
-                    ],
-                }),
-
-                // City, State, ZIP bold, size 12
-                new Paragraph({
-                    alignment: AlignmentType.LEFT,
-                    spacing: { after: 160 },
-                    indent: { left: 600 },
-                    children: [
-                        new TextRun({ text: formattedAddressLines[1], size: 24, bold: true }),
-                    ],
-                }),
-// Add spacing of 0.4 inches before the client name
-new Paragraph({
-                    alignment: AlignmentType.LEFT,
-                    spacing: { after: 540 }, // 
-                }),
-                // Invoice Table
-                new Table({
-                    width: { size: 100, type: WidthType.PERCENTAGE },
-                    rows: [tableHeader, ...tableBody, totalRow],
-                }),
-            ],
-        }],
-    });
-
-    Packer.toBlob(doc).then(blob => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${clientName}_invoice.docx`;
-        link.click();
-        URL.revokeObjectURL(url);
-    });
-}
-</script>
+                    new Paragraph({ text: clientName, bold: true }),
+                    new Paragraph({ text: rawAddressLines[0] || '' }),
+                    new Paragraph({ text: rawAddressLines[1] || '' }),
+                    new Paragraph({ spacing: { after: 200 } }),
+                    new Table({
+                        width: { size: 100, type: WidthType.PERCENTAGE },
+                        rows: [headerRow, ...tableBody]
+                    }),
+                    new Paragraph({ children: [new PageBreak()] })
+                ];
+                const doc = new Document({ sections: [{ properties: {}, children: sectionChildren }] });
+                const blob = await Packer.toBlob(doc);
+                const link = document.createElement("a");
+                const today = new Date().toLocaleDateString('en-US').replace(/\//g, '.'); // Retained single declaration
+                link.href = URL.createObjectURL(blob);
+                link.download = `ClientInvoice_${clientName}_${today}.docx`;
+                link.click();
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    </script>
 </body>
 </html>
+```
