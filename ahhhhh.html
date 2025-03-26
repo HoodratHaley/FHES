@@ -72,6 +72,9 @@
         </table>
     <h2>Disclaimer: if you have any questions please call 1234567</h2>
 <script>
+    function styledCell(value) {
+    return `<td style="color: ${value ? 'black' : 'white'}">${value ?? ''}</td>`;
+}
 let sortedData = [];
 let clientName = "";
 let balanceOwed = 0; // ✅ Define globally
@@ -105,7 +108,7 @@ if (clientName.includes(',')) {
 document.getElementById('clientName').innerText = clientName;
 
 // Extract Client Address accurately (starting after client's name)
-let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 2;
+let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
 let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
     .map(row => row[0]?.replace("Family Health Education Services", "")
                        .replace("930 North 10th St", "")
@@ -159,56 +162,47 @@ function formatDate(date) {
     if (!date) return '';
     return date.replace(/-/g, '/'); 
 }
+function styledCell(value) {
+    const displayValue = value ?? '';
+    const isEmpty = displayValue === '';
+    return `<td style="color: ${isEmpty ? 'white' : 'black'}">${displayValue}</td>`;
+}
 
 function extractData(rows) {
     const tableBody = document.querySelector('#dataTable tbody');
     tableBody.innerHTML = '';
-    balanceOwed = 0; // ✅ Reset balance owed
+    balanceOwed = 0;
 
     rows.forEach(row => {
         if (!row[0]) return;
 
-        let isClaimRow = row[0].includes('CL-');
-        let isServiceLineRow = row[0].includes('Service Line#');
+        const isClaimRow = row[0].includes('CL-');
+        const isServiceLineRow = row[0].includes('Service Line#');
 
-        let fields = row[0].match(/(\d{2}\/\d{2}\/\d{4}|\d+|\$[\d,]+\.\d{2}|\w.*?)(?=\s+\d{2}\/|\s+\$|\s+\d|\s*$)/g) || [];
+        const fields = row[0].split(/\s{2,}/);
 
-        let claimOrServiceLine = isClaimRow ? fields[0] : `${fields[0]} ${fields[1]}`;
-        let serviceDate = isClaimRow ? fields[1] : fields[2];
+        // Claim number and service date
+        const claimOrServiceLine = fields[0];
+        const serviceDate = fields[1];
 
-        let procedureCode = isClaimRow ? null : fields[3];
-        let procedureDescription = isClaimRow ? null : fields[4];
-
-        if (!isClaimRow && procedureDescription) {
-            let match = procedureDescription.match(/(.*?)(\d+)$/);
-            if (match) {
-                procedureDescription = match[1].trim();
-                fields[5] = match[2];
-            }
+        // Procedure code + description
+        let procedure = '';
+        if (!isClaimRow && fields[2]) {
+            const [code, ...descParts] = fields[2].split('-');
+            procedure = `${code} - ${descParts.join('-')}`.trim();
         }
 
-        let units = isClaimRow ? fields[4] : fields[5];
-        let unitRate = isClaimRow ? null : fields[6];
-        let totalCharge = isClaimRow ? fields[6] : (isServiceLineRow ? null : fields[7]);
-
-        if (!isClaimRow) {
-            if (!isNaN(parseFloat(units)) && fields[6] && !fields[6].startsWith('$')) {
-                unitRate = fields[5];
-                totalCharge = fields[6];
-            } else if (fields[5] && fields[5].startsWith('$')) {
-                unitRate = fields[6];
-                totalCharge = fields[7];
-            }
-        }
-
-        let patientCharge = isClaimRow ? fields[7] : (isServiceLineRow ? null : fields[8]);
-        let totalPaid = isClaimRow ? fields[8] : (isServiceLineRow ? null : fields[9]);
-        let insurancePaid = isClaimRow ? fields[9] : (isServiceLineRow ? null : fields[10]);
-        let patientPaid = isClaimRow ? fields[10] : (isServiceLineRow ? null : fields[11]);
-        let adjustment = isClaimRow ? fields[11] : (isServiceLineRow ? null : fields[12]);
-        let totalBalance = isClaimRow ? fields[12] : (isServiceLineRow ? null : fields[13]);
-        let insuranceBalance = isClaimRow ? fields[13] : (isServiceLineRow ? null : fields[14]);
-        let balanceOwedRow = isClaimRow ? fields[14] : (isServiceLineRow ? null : fields[15]);
+        const units = isClaimRow ? fields[3] : fields[3];
+        const unitRate = isClaimRow ? '' : fields[4];
+        const totalCharge = isClaimRow ? fields[5] : '';
+        const patientCharge = isClaimRow ? fields[6] : '';
+        const totalPaid = isClaimRow ? fields[7] : '';
+        const insurancePaid = isClaimRow ? fields[8] : '';
+        const patientPaid = isClaimRow ? fields[9] : '';
+        const adjustment = isClaimRow ? fields[10] : '';
+        const totalBalance = isClaimRow ? fields[11] : '';
+        const insuranceBalance = isClaimRow ? fields[12] : '';
+        const balanceOwedRow = isClaimRow ? fields[13] : '';
 
         if (balanceOwedRow) {
             balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
@@ -216,22 +210,21 @@ function extractData(rows) {
 
         tableBody.innerHTML += `
             <tr>
-                <td>${claimOrServiceLine || ''}</td>
-                <td>${formatDate(serviceDate) || ''}</td>
-                <td>${procedureCode ? `${procedureCode} - ${procedureDescription}` : ''}</td>
-                <td>${units || ''}</td>
-                <td>${unitRate || ''}</td>
-                <td>${totalCharge || ''}</td>
-                <td>${patientCharge || ''}</td>
-                <td>${totalPaid || ''}</td>
-                <td>${insurancePaid || ''}</td>
-                <td>${patientPaid || ''}</td>
-                <td>${adjustment || ''}</td>
-                <td>${totalBalance || ''}</td>
-                <td>${insuranceBalance || ''}</td>
-                <td>${balanceOwedRow || ''}</td>
-            </tr>
-        `;
+                ${styledCell(claimOrServiceLine)}
+                ${styledCell(formatDate(serviceDate))}
+                ${styledCell(procedure)}
+                ${styledCell(units)}
+                ${styledCell(unitRate)}
+                ${styledCell(totalCharge)}
+                ${styledCell(patientCharge)}
+                ${styledCell(totalPaid)}
+                ${styledCell(insurancePaid)}
+                ${styledCell(patientPaid)}
+                ${styledCell(adjustment)}
+                ${styledCell(totalBalance)}
+                ${styledCell(insuranceBalance)}
+                ${styledCell(balanceOwedRow)}
+            </tr>`;
     });
 }
 function downloadWord() {
