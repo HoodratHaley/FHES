@@ -299,7 +299,7 @@ formattedAddressLines = rawAddressLines; // Update global variable
                 const link = document.createElement("a");
                 const today = new Date().toLocaleDateString('en-US').replace(/\//g, '.'); // Retained single declaration
                 link.href = URL.createObjectURL(blob);
-                link.download = `ClientInvoice_${clientName}_${today}.docx`;
+                link.download = `ClientInvoice_${today}.docx`;
                 link.click();
             }
         };
