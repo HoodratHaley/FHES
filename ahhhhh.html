@@ -162,10 +162,11 @@ function formatDate(date) {
     if (!date) return '';
     return date.replace(/-/g, '/'); 
 }
-function styledCell(value) {
+function styledCell(value, forceBlack = false) {
     const displayValue = value ?? '';
     const isEmpty = displayValue === '';
-    return `<td style="color: ${isEmpty ? 'white' : 'black'}">${displayValue}</td>`;
+    const color = (forceBlack || !isEmpty) ? 'black' : 'white';
+    return `<td style="color: ${color}">${displayValue}</td>`;
 }
 
 function extractData(rows) {
@@ -173,7 +174,7 @@ function extractData(rows) {
     tableBody.innerHTML = '';
     balanceOwed = 0;
 
-    rows.forEach(row => {
+    rows.forEach((row, index) => {
         if (!row[0]) return;
 
         const isClaimRow = row[0].includes('CL-');
@@ -181,49 +182,57 @@ function extractData(rows) {
 
         const fields = row[0].split(/\s{2,}/);
 
-        // Claim number and service date
         const claimOrServiceLine = fields[0];
         const serviceDate = fields[1];
 
         // Procedure code + description
         let procedure = '';
-        if (!isClaimRow && fields[2]) {
-            const [code, ...descParts] = fields[2].split('-');
-            procedure = `${code} - ${descParts.join('-')}`.trim();
+        if (!isClaimRow || fields[2]) {
+            const [code, ...descParts] = fields[2]?.split('-') || [];
+            procedure = code && descParts.length
+                ? `${code} - ${descParts.join('-')}`.trim()
+                : '';
         }
 
-        const units = isClaimRow ? fields[3] : fields[3];
-        const unitRate = isClaimRow ? '' : fields[4];
-        const totalCharge = isClaimRow ? fields[5] : '';
-        const patientCharge = isClaimRow ? fields[6] : '';
-        const totalPaid = isClaimRow ? fields[7] : '';
-        const insurancePaid = isClaimRow ? fields[8] : '';
-        const patientPaid = isClaimRow ? fields[9] : '';
-        const adjustment = isClaimRow ? fields[10] : '';
-        const totalBalance = isClaimRow ? fields[11] : '';
-        const insuranceBalance = isClaimRow ? fields[12] : '';
-        const balanceOwedRow = isClaimRow ? fields[13] : '';
+        const units = fields[3] || '';
+        const unitRate = fields[4] || '';
+        const totalCharge = fields[5] || '';
+        const patientCharge = fields[6] || '';
+        const totalPaid = fields[7] || '';
+        const insurancePaid = fields[8] || '';
+        const patientPaid = fields[9] || '';
+        const adjustment = fields[10] || '';
+        const totalBalance = fields[11] || '';
+        const insuranceBalance = fields[12] || '';
+        const balanceOwedRow = fields[13] || '';
 
         if (balanceOwedRow) {
             balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
         }
 
+        // 🧠 Look ahead to next row to check for a service line
+        const nextRow = rows[index + 1];
+        const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
+
+        // If claim row and NO service line follows it, treat it like a full row
+        const forceBlack = isClaimRow && !nextHasServiceLine;
+
         tableBody.innerHTML += `
             <tr>
-                ${styledCell(claimOrServiceLine)}
-                ${styledCell(formatDate(serviceDate))}
-                ${styledCell(procedure)}
-                ${styledCell(units)}
-                ${styledCell(unitRate)}
-                ${styledCell(totalCharge)}
-                ${styledCell(patientCharge)}
-                ${styledCell(totalPaid)}
-                ${styledCell(insurancePaid)}
-                ${styledCell(patientPaid)}
-                ${styledCell(adjustment)}
-                ${styledCell(totalBalance)}
-                ${styledCell(insuranceBalance)}
-                ${styledCell(balanceOwedRow)}
+                ${styledCell(claimOrServiceLine, true)}
+                ${styledCell(formatDate(serviceDate), true)}
+                ${styledCell(procedure, forceBlack)}
+                ${styledCell(units, forceBlack)}
+                ${styledCell(unitRate, forceBlack)}
+                ${styledCell(totalCharge, forceBlack)}
+                ${styledCell(patientCharge, forceBlack)}
+                ${styledCell(totalPaid, forceBlack)}
+                ${styledCell(insurancePaid, forceBlack)}
+                ${styledCell(patientPaid, forceBlack)}
+                ${styledCell(adjustment, forceBlack)}
+                ${styledCell(totalBalance, forceBlack)}
+                ${styledCell(insuranceBalance, forceBlack)}
+                ${styledCell(balanceOwedRow, forceBlack)}
             </tr>`;
     });
 }
