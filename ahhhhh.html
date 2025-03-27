@@ -264,7 +264,7 @@ function extractData(rows) {
     tableBody.innerHTML = '';
     balanceOwed = 0;
 
-    rows.forEach((row) => {
+    rows.forEach((row, index) => {
         const {
             claimOrServiceLine,
             serviceDate,
@@ -279,41 +279,34 @@ function extractData(rows) {
             adjustment,
             totalBalance,
             insuranceBalance,
-            balanceOwedRow,
-            forceBlack
+            balanceOwedRow
         } = row;
+
+        const isClaimRow = claimOrServiceLine?.includes("CL-");
+        const nextRow = rows[index + 1];
+        const nextIsServiceLine = nextRow && nextRow.claimOrServiceLine?.includes("Service Line#");
+        const whiteOut = isClaimRow && nextIsServiceLine;
 
         if (balanceOwedRow) {
             balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
         }
-        let procedureCode = '';
-let procedureDescription = '';
-if (row[2]) {
-    const match = row[2].match(/^(\d{5})\s*-\s*(.+)$/);
-    if (match) {
-        procedureCode = match[1];
-        procedureDescription = match[2];
-    } else {
-        procedureCode = row[2].substring(0, 5);
-        procedureDescription = row[2].substring(6).trim();
-    }
-}
+
         tableBody.innerHTML += `
             <tr>
                 ${styledCell(claimOrServiceLine, true)}
                 ${styledCell(formatDate(serviceDate), true)}
-                ${styledCell(procedure, forceBlack)}
-                ${styledCell(units, forceBlack)}
-                ${styledCell(unitRate, forceBlack)}
-                ${styledCell(totalCharge, forceBlack)}
-                ${styledCell(patientCharge, forceBlack)}
-                ${styledCell(totalPaid, forceBlack)}
-                ${styledCell(insurancePaid, forceBlack)}
-                ${styledCell(patientPaid, forceBlack)}
-                ${styledCell(adjustment, forceBlack)}
-                ${styledCell(totalBalance, forceBlack)}
-                ${styledCell(insuranceBalance, forceBlack)}
-                ${styledCell(balanceOwedRow, forceBlack)}
+                ${styledCell(procedure, whiteOut)}
+                ${styledCell(units, whiteOut)}
+                ${styledCell(unitRate, whiteOut)}
+                ${styledCell(totalCharge, false)}
+                ${styledCell(patientCharge, false)}
+                ${styledCell(totalPaid, false)}
+                ${styledCell(insurancePaid, false)}
+                ${styledCell(patientPaid, false)}
+                ${styledCell(adjustment, false)}
+                ${styledCell(totalBalance, false)}
+                ${styledCell(insuranceBalance, false)}
+                ${styledCell(balanceOwedRow, false)}
             </tr>`;
     });
 }
@@ -335,7 +328,7 @@ async function downloadWord() {
             balanceOwed
         } = client;
 
-        // Build table header
+        // Header row
         const headerRow = new TableRow({
             children: [
                 "Claim Number", "Service Date", "Procedure (and Codes)", "Units", "Unit Rate", "Total Charge",
@@ -349,46 +342,75 @@ async function downloadWord() {
             )
         });
 
-        // Build body rows
-        const bodyRows = tableRows.map(row =>
-            new TableRow({
-                children: [
-                    row.claimOrServiceLine,
-                    row.serviceDate,
-                    row.procedure,
-                    row.units,
-                    row.unitRate,
-                    row.totalCharge,
-                    row.patientCharge,
-                    row.totalPaid,
-                    row.insurancePaid,
-                    row.patientPaid,
-                    row.adjustment,
-                    row.totalBalance,
-                    row.insuranceBalance,
-                    row.balanceOwedRow
-                ].map(val =>
-                    new TableCell({
-                        children: [new Paragraph({ text: val ?? '' })]
-                    })
-                )
-            })
-        );
+        // Body rows
+        const bodyRows = tableRows.map((row, index) => {
+    const isClaimRow = row.claimOrServiceLine?.includes("CL-");
+    const nextRow = tableRows[index + 1];
+    const nextIsServiceLine = nextRow && nextRow.claimOrServiceLine?.includes("Service Line#");
+    const whiteOut = isClaimRow && nextIsServiceLine;
 
+    const blackText = color => new TextRun({ text: color ?? '', size: 22, color: '000000' });
+    const whiteText = color => new TextRun({ text: color ?? '', size: 22, color: 'FFFFFF' });
+
+    return new TableRow({
+        children: [
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.claimOrServiceLine)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.serviceDate)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [whiteOut ? whiteText(row.procedure) : blackText(row.procedure)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [whiteOut ? whiteText(row.units) : blackText(row.units)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [whiteOut ? whiteText(row.unitRate) : blackText(row.unitRate)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.totalCharge)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.patientCharge)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.totalPaid)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.insurancePaid)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.patientPaid)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.adjustment)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.totalBalance)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.insuranceBalance)] })] }),
+            new TableCell({ children: [new Paragraph({ children: [blackText(row.balanceOwedRow)] })] }),
+        ]
+    });
+});
         // Total row
         const totalRow = new TableRow({
-            children: [
-                ...Array(13).fill(new TableCell({
-                    children: [new Paragraph("")],
-                    shading: { fill: "D3D3D3" }
-                })),
-                new TableCell({
-                    children: [new Paragraph({ text: "Total", bold: true })],
-                    shading: { fill: "D3D3D3" }
-                }),
-                new TableCell({
-                    children: [new Paragraph({ text: `$${balanceOwed.toFixed(2)}`, bold: true })],
-                    shading: { fill: "D3D3D3" }
+    children: [
+        new TableCell({
+            children: [new Paragraph({ text: "Total", bold: true })],
+            columnSpan: 13,
+            shading: { fill: "D3D3D3" }
+        }),
+        new TableCell({
+            children: [new Paragraph({ text: `$${balanceOwed.toFixed(2)}`, bold: true })],
+            shading: { fill: "D3D3D3" }
+        })
+    ]
+});
+        // PAY THIS AMOUNT table box
+        const payAmountBox = new Table({
+            alignment: AlignmentType.CENTER,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            rows: [
+                new TableRow({
+                    children: [
+                        new TableCell({
+                            children: [new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({
+                                        text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`,
+                                        bold: true,
+                                        size: 28
+                                    })
+                                ]
+                            })],
+                            borders: {
+                                top: { style: BorderStyle.SINGLE, size: 4 },
+                                bottom: { style: BorderStyle.SINGLE, size: 4 },
+                                left: { style: BorderStyle.SINGLE, size: 4 },
+                                right: { style: BorderStyle.SINGLE, size: 4 }
+                            }
+                        })
+                    ]
                 })
             ]
         });
@@ -406,12 +428,9 @@ async function downloadWord() {
                     children: [new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 24 })],
                     spacing: { after: 160 }
                 }),
-                new Paragraph({
-                    alignment: AlignmentType.CENTER,
-                    children: [new TextRun({ text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`, bold: true, size: 28 })],
-                    spacing: { after: 280 }
-                }),
-                new Paragraph({}),
+                payAmountBox,
+                new Paragraph({ spacing: { after: 550 } }),
+                // Client Info
                 new Paragraph({
                     children: [new TextRun({ text: clientName, bold: true, size: 24 })],
                     spacing: { after: 160 },
@@ -424,17 +443,21 @@ async function downloadWord() {
                         indent: { left: 600 }
                     })
                 ),
-                new Paragraph({ text: "", spacing: { after: 300 } }),
+                new Paragraph({ text: "", spacing: { after: 550 } }),
+
                 new Table({
                     width: { size: 100, type: WidthType.PERCENTAGE },
                     rows: [headerRow, ...bodyRows, totalRow]
                 }),
+
+                // Page break after each section (except last)
                 ...(index < allClients.length - 1
-    ? [new Paragraph({ children: [], pageBreakBefore: true })]
-    : [])
+                    ? [new Paragraph({ children: [], pageBreakBefore: true })]
+                    : [])
             ]
         };
     });
+
     const doc = new Document({ sections });
 
     try {
@@ -448,7 +471,6 @@ async function downloadWord() {
         console.error("❌ Error generating Word doc:", err);
     }
 }
-
 </script>
-</body>
+</body> 
 </html>
