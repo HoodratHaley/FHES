@@ -37,422 +37,448 @@
         button:hover {
             background-color: #45a049;
         }
-button:hover {
-    background-color: #45a049;
-}
-#progressBarContainer {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(255, 255, 255, 0.8);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-}
-#progressBar {
-    width: 50%;
-    background-color: #f3f3f3;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    overflow: hidden;
-}
-#progressBarFill {
-    height: 20px;
-    width: 0;
-    background-color: #4CAF50;
-    text-align: center;
-    color: white;
-    line-height: 20px;
-    font-size: 14px;
-}
-</style>
+    </style>
 </head>
 <body>
+
 <h2>Upload Invoice File</h2>
 <input type="file" id="fileUpload" accept=".xlsx" />
 <button onclick="processFile()">Process File</button>
 <button onclick="downloadWord()">Download Word</button>
-<h2 id="clientName"></h2>
-<h3 id="clinicName"></h3>
-<div id="clientAddress">
-</div>
-<table id="dataTable">
-<thead>
-    <tr>
-        <th>Claim Number</th>
-        <th>Service Date</th>
-        <th>Procedure (and Codes)</th>
-        <th>Units</th>
-        <th>Unit Rate</th>
-        <th>Total Charge</th>
-        <th>Patient Charge</th>
-        <th>Total Paid</th>
-        <th>Insurance Paid</th>
-        <th>Patient Paid</th>
-        <th>Total Adjustment</th>
-        <th>Total Balance</th>
-        <th>Insurance Balance</th>
-        <th>Balance Owed</th>
-    </tr>
-</thead>
-<tbody></tbody>
-</table>
-<h2>Disclaimer: if you have any questions please call 1234567</h2>
-<div id="progressBarContainer">
-<div id="progressBar">
-    <div id="progressBarFill">0%</div>
-</div>
-</div>
+    <h2 id="clientName"></h2>
+    <h3 id="clinicName"></h3>
+    <div id="clientAddress">
+    </div>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Claim Number</th>
+                <th>Service Date</th>
+                <th>Procedure (and Codes)</th>
+                <th>Units</th>
+                <th>Unit Rate</th>
+                <th>Total Charge</th>
+                <th>Patient Charge</th>
+                <th>Total Paid</th>
+                <th>Insurance Paid</th>
+                <th>Patient Paid</th>
+                <th>Total Adjustment</th>
+                <th>Total Balance</th>
+                <th>Insurance Balance</th>
+                <th>Balance Owed</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+        </table>
+    <h2>Disclaimer: if you have any questions please call 1234567</h2>
 <script>
-function styledCell(value) {
-return `<td style="color: ${value ? 'black' : 'white'}">${value ?? ''}</td>`;
+    function styledCell(value) {
+    return `<td style="color: ${value ? 'black' : 'white'}">${value ?? ''}</td>`;
 }
 let sortedData = [];
 let clientName = "";
 let balanceOwed = 0; // ✅ Define globally
 let formattedAddressLines = []; // ✅ Global address storage
-
-
-function processFile() {
-const file = document.getElementById('fileUpload').files[0];
-if (!file) {
-alert("Please select a file first.");
-return;
-}
-
-document.getElementById('progressBarContainer').style.display = 'flex';
-updateProgressBar(0);
-
-const reader = new FileReader();
-reader.onload = (e) => {
-try {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
-    // Extract Client Name correctly from row containing "Client Name(s):"
-    let clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
-    clientName = clientNameRow ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0] : "[CLIENT NAME]";
-    document.getElementById('clientName').innerText = clientName;
-
-    // ✅ Reformat clientName to "Firstname Lastname"
-    if (clientName.includes(',')) {
-        let parts = clientName.split(',');
-        clientName = `${parts[1].trim()} ${parts[0].trim()}`;
-    }
-
-    document.getElementById('clientName').innerText = clientName;
-
-    // Extract Client Address accurately (starting after client's name)
-    let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
-    let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
-        .map(row => row[0]?.replace("Family Health Education Services", "")
-                        .replace("930 North 10th St", "")
-                        .trim())
-        .filter(line => line && line.length > 0 && !line.includes(clientName));
-
-    // Properly define streetLine and cityStateZipLine
-    formattedAddressLines = rawAddressLines; // Update global variable
-    let streetLine = formattedAddressLines[0] || '';
-    let cityStateZipLine = formattedAddressLines[1] || '';
-
-    // Populate HTML clearly
-    document.getElementById('clientAddress').innerHTML = `
-        <p>${streetLine}</p>
-        <p>${cityStateZipLine}</p>
-    `;
-
-    // ✅ Clean up whitespace and hidden characters
-    jsonData = jsonData.map(row => row.map(cell => 
-        typeof cell === 'string' 
-            ? cell.replace(/[\r\n\t]+/g, ' ').trim() 
-            : cell
-    ));
-
-    console.log("Extracted Data (Cleaned):", JSON.stringify(jsonData, null, 2));
-    // ✅ Find the starting row based on actual content
-    const tableStartIndex = jsonData.findIndex(row =>
-        row[0] &&
-        (row[0].includes('CL-') || row[0].includes('Service Line#'))
-    );
-
-    if (tableStartIndex === -1) {
-        alert("Invalid file format. Could not find claim numbers or service lines.");
-        return;
-    }
-
-    // ✅ Extract all valid rows
-    sortedData = jsonData
-        .slice(tableStartIndex)
-        .filter(row => row[0] &&
-            (row[0].includes('CL-') || row[0].includes('Service Line#'))
-        );
-
-    extractData(sortedData);
-
-    // Simulate processing multiple clients
-    const totalClients = 10; // Example: 10 clients
-    for (let i = 0; i < totalClients; i++) {
-        setTimeout(() => {
-            // Simulate processing logic for each client
-            console.log(`Processing client ${i + 1}...`);
-            updateProgressBar(((i + 1) / totalClients) * 100);
-
-            if (i === totalClients - 1) {
-                document.getElementById('progressBarContainer').style.display = 'none';
-                alert("Processing complete!");
-            }
-        }, i * 500); // Simulate delay for each client
-    }
-} catch (error) {
-    alert(`Error processing file: ${error.message}`);
-    document.getElementById('progressBarContainer').style.display = 'none';
-}
-};
-
-reader.readAsArrayBuffer(file);
-}
+let allClients = []; // Each entry = { clientName, addressLines, tableRows, balanceOwed }
 
 function formatDate(date) {
-if (!date) return '';
-return date.replace(/-/g, '/'); 
+    if (!date) return '';
+    return date.replace(/-/g, '/'); 
 }
 function styledCell(value, forceBlack = false) {
-const displayValue = value ?? '';
-const isEmpty = displayValue === '';
-const color = (forceBlack || !isEmpty) ? 'black' : 'white';
-return `<td style="color: ${color}">${displayValue}</td>`;
+    const displayValue = value ?? '';
+    const isEmpty = displayValue === '';
+    const color = (forceBlack || !isEmpty) ? 'black' : 'white';
+    return `<td style="color: ${color}">${displayValue}</td>`;
 }
+function processFile() {
+    const file = document.getElementById('fileUpload').files[0];
+    if (!file) {
+        alert("Please select a file first.");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
 
-function extractData(rows) {
-const tableBody = document.querySelector('#dataTable tbody');
-tableBody.innerHTML = '';
-balanceOwed = 0;
+            allClients = []; // Reset
 
-rows.forEach((row, index) => {
-if (!row[0]) return;
+            workbook.SheetNames.forEach((sheetName, index) => {
+                let jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
 
-const isClaimRow = row[0].includes('CL-');
-const isServiceLineRow = row[0].includes('Service Line#');
+                // Extract client name
+                let clientNameRow = jsonData.find(row => row[0]?.includes("Client Name(s):"));
+                let clientNameLocal = clientNameRow
+                    ? clientNameRow[0].split("Client Name(s):")[1].trim().split(" (")[0]
+                    : "[CLIENT NAME]";
 
-const fields = row[0].split(/\s{2,}/);
+                if (clientNameLocal.includes(',')) {
+                    let parts = clientNameLocal.split(',');
+                    clientNameLocal = `${parts[1].trim()} ${parts[0].trim()}`;
+                }
 
-const claimOrServiceLine = fields[0];
-const serviceDate = fields[1];
+                // Extract address
+                let addressStartIndex = jsonData.findIndex(row => row[0]?.includes("Amount Enclosed:")) + 3;
+                let rawAddressLines = jsonData.slice(addressStartIndex, addressStartIndex + 3)
+                    .map(row => row[0]?.replace("Family Health Education Services", "")
+                        .replace("930 North 10th St", "")
+                        .trim())
+                    .filter(line => line && line.length > 0 && !line.includes(clientNameLocal));
 
-// Procedure code + description
-let procedure = '';
-if (!isClaimRow || fields[2]) {
-    const [code, ...descParts] = fields[2]?.split('-') || [];
-    procedure = code && descParts.length
-        ? `${code} - ${descParts.join('-')}`.trim()
-        : '';
-}
+                const addressLines = [
+                    rawAddressLines[0] || '',
+                    rawAddressLines[1] || ''
+                ];
 
-const units = fields[3] || '';
-const unitRate = fields[4] || '';
-const totalCharge = fields[5] || '';
-const patientCharge = fields[6] || '';
-const totalPaid = fields[7] || '';
-const insurancePaid = fields[8] || '';
-const patientPaid = fields[9] || '';
-const adjustment = fields[10] || '';
-const totalBalance = fields[11] || '';
-const insuranceBalance = fields[12] || '';
-const balanceOwedRow = fields[13] || '';
+                // Clean whitespace and hidden characters
+                jsonData = jsonData.map(row => row.map(cell =>
+                    typeof cell === 'string'
+                        ? cell.replace(/[\r\n\t]+/g, ' ').trim()
+                        : cell
+                ));
 
-if (balanceOwedRow) {
-    balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
-}
+                const tableStartIndex = jsonData.findIndex(row =>
+                    row[0] && (row[0].includes('CL-') || row[0].includes('Service Line#'))
+                );
 
-// 🧠 Look ahead to next row to check for a service line
-const nextRow = rows[index + 1];
-const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
+                if (tableStartIndex === -1) {
+                    console.warn(`Skipping sheet "${sheetName}" — no claims or service lines.`);
+                    return;
+                }
 
-// If claim row and NO service line follows it, treat it like a full row
-const forceBlack = isClaimRow && !nextHasServiceLine;
+                const sortedDataLocal = jsonData
+                    .slice(tableStartIndex)
+                    .filter(row => row[0] &&
+                        (row[0].includes('CL-') || row[0].includes('Service Line#'))
+                    );
 
-tableBody.innerHTML += `
-    <tr>
-        ${styledCell(claimOrServiceLine, true)}
-        ${styledCell(formatDate(serviceDate), true)}
-        ${styledCell(procedure, forceBlack)}
-        ${styledCell(units, forceBlack)}
-        ${styledCell(unitRate, forceBlack)}
-        ${styledCell(totalCharge, forceBlack)}
-        ${styledCell(patientCharge, forceBlack)}
-        ${styledCell(totalPaid, forceBlack)}
-        ${styledCell(insurancePaid, forceBlack)}
-        ${styledCell(patientPaid, forceBlack)}
-        ${styledCell(adjustment, forceBlack)}
-        ${styledCell(totalBalance, forceBlack)}
-        ${styledCell(insuranceBalance, forceBlack)}
-        ${styledCell(balanceOwedRow, forceBlack)}
-    </tr>`;
+                let balanceOwedLocal = 0;
+                const tableRows = [];
+
+                sortedDataLocal.forEach((row, rowIndex) => {
+    const rawLine = row[0];
+    const fields = rawLine.split(/\s{2,}/); // <-- THE FIX
+
+    const isClaimRow = fields[0].includes('CL-');
+    const isServiceLineRow = fields[0].includes('Service Line#');
+
+    const claimOrServiceLine = fields[0]?.trim();
+    const serviceDate = fields[1]?.trim();
+
+    let procedureCode = '';
+    let procedureDescription = '';
+    if (fields[2]) {
+        const match = fields[2].match(/^(\d{5})\s*-\s*(.+)$/);
+        if (match) {
+            procedureCode = match[1];
+            procedureDescription = match[2];
+        } else {
+            procedureCode = fields[2].substring(0, 5);
+            procedureDescription = fields[2].substring(6).trim();
+        }
+    }
+
+    const units = fields[3] || '';
+    const unitRate = isClaimRow ? fields[4] || '' : '';
+    const totalCharge = isClaimRow ? fields[5] || '' : '';
+    const patientCharge = isClaimRow ? fields[6] || '' : '';
+    const totalPaid = isClaimRow ? fields[7] || '' : '';
+    const insurancePaid = isClaimRow ? fields[8] || '' : '';
+    const patientPaid = isClaimRow ? fields[9] || '' : '';
+    const adjustment = isClaimRow ? fields[10] || '' : '';
+    const totalBalance = isClaimRow ? fields[11] || '' : '';
+    const insuranceBalance = isClaimRow ? fields[12] || '' : '';
+    const balanceOwedRow = isClaimRow ? fields[13] || '' : '';
+
+    if (balanceOwedRow) {
+        balanceOwedLocal += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
+    }
+
+    const nextRow = sortedDataLocal[rowIndex + 1];
+    const nextHasServiceLine = nextRow && nextRow[0]?.includes('Service Line#');
+    const forceBlack = isClaimRow && !nextHasServiceLine;
+
+    tableRows.push({
+        claimOrServiceLine,
+        serviceDate,
+        procedure: `${procedureCode} - ${procedureDescription}`,
+        units,
+        unitRate,
+        totalCharge,
+        patientCharge,
+        totalPaid,
+        insurancePaid,
+        patientPaid,
+        adjustment,
+        totalBalance,
+        insuranceBalance,
+        balanceOwedRow,
+        forceBlack
+    });
 });
+                // Store this client
+                allClients.push({
+                    clientName: clientNameLocal,
+                    addressLines,
+                    tableRows,
+                    balanceOwed: balanceOwedLocal
+                });
+
+                // If it's the first client, show in UI
+                if (index === 0) {
+                    clientName = clientNameLocal;
+                    formattedAddressLines = addressLines;
+                    sortedData = tableRows;
+                    balanceOwed = balanceOwedLocal;
+                    document.getElementById('clientName').innerText = clientName;
+                    document.getElementById('clientAddress').innerHTML = `
+                        <p>${formattedAddressLines[0]}</p>
+                        <p>${formattedAddressLines[1]}</p>
+                    `;
+                    console.log("🧪 Sorted Data Going to extractData():", sortedData); // ✅ Add this
+    extractData(sortedData);
 }
-function downloadWord() {
+                    extractData(sortedData);
+                });
+        } catch (error) {
+            console.error("Error processing file:", error);
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+function styledCell(value, forceBlack = false) {
+    const displayValue = value ?? '';
+    const isEmpty = displayValue === '';
+    const color = (forceBlack || !isEmpty) ? 'black' : 'white';
+    return `<td style="color: ${color}">${displayValue}</td>`;
+}
+function extractData(rows) {
+    const tableBody = document.querySelector('#dataTable tbody');
+    tableBody.innerHTML = '';
+    balanceOwed = 0;
+
+    rows.forEach((row) => {
+        const {
+            claimOrServiceLine,
+            serviceDate,
+            procedure,
+            units,
+            unitRate,
+            totalCharge,
+            patientCharge,
+            totalPaid,
+            insurancePaid,
+            patientPaid,
+            adjustment,
+            totalBalance,
+            insuranceBalance,
+            balanceOwedRow,
+            forceBlack
+        } = row;
+
+        if (balanceOwedRow) {
+            balanceOwed += parseFloat(balanceOwedRow.replace('$', '').replace(',', '')) || 0;
+        }
+        let procedureCode = '';
+let procedureDescription = '';
+if (row[2]) {
+    const match = row[2].match(/^(\d{5})\s*-\s*(.+)$/);
+    if (match) {
+        procedureCode = match[1];
+        procedureDescription = match[2];
+    } else {
+        procedureCode = row[2].substring(0, 5);
+        procedureDescription = row[2].substring(6).trim();
+    }
+}
+        tableBody.innerHTML += `
+            <tr>
+                ${styledCell(claimOrServiceLine, true)}
+                ${styledCell(formatDate(serviceDate), true)}
+                ${styledCell(procedure, forceBlack)}
+                ${styledCell(units, forceBlack)}
+                ${styledCell(unitRate, forceBlack)}
+                ${styledCell(totalCharge, forceBlack)}
+                ${styledCell(patientCharge, forceBlack)}
+                ${styledCell(totalPaid, forceBlack)}
+                ${styledCell(insurancePaid, forceBlack)}
+                ${styledCell(patientPaid, forceBlack)}
+                ${styledCell(adjustment, forceBlack)}
+                ${styledCell(totalBalance, forceBlack)}
+                ${styledCell(insuranceBalance, forceBlack)}
+                ${styledCell(balanceOwedRow, forceBlack)}
+            </tr>`;
+    });
+}
+async function downloadWord() {
 const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, TextRun, AlignmentType, BorderStyle, PageOrientation } = docx;
 
-const currentDate = new Date().toLocaleDateString('en-US', {
-year: 'numeric', month: '2-digit', day: '2-digit'
-});
-
-const tableHeader = new TableRow({
-children: Array.from(document.querySelectorAll('#dataTable thead th')).map(th =>
-    new TableCell({
-        children: [
-            new Paragraph({
-                children: [new TextRun({ text: th.innerText, bold: true, size: 18 })],
-                alignment: AlignmentType.CENTER
-            }),
-        ],
-        shading: { fill: 'D3D3D3' }
-    })
-)
-});
-
-const tableBody = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(row =>
-new TableRow({
-    children: Array.from(row.querySelectorAll('td')).map(cell =>
-        new TableCell({
-            children: [
-                new Paragraph({
-                    children: [new TextRun({ text: cell.innerText || '', size: 18 })],
-                    alignment: AlignmentType.CENTER
-                }),
-            ],
-        })
-    )
-})
-);
-
-const totalRow = new TableRow({
-children: [
-    ...Array(13).fill(new TableCell({
-        children: [new Paragraph({ text: "" })],
-        shading: { fill: 'D3D3D3' }
-    })),
-    new TableCell({
-        children: [new Paragraph({ children: [new TextRun({ text: "Total", bold: true, size: 18 })] })],
-        shading: { fill: 'D3D3D3' }
-    }),
-    new TableCell({
-        children: [new Paragraph({ children: [new TextRun({ text: `$${balanceOwed.toFixed(2)}`, bold: true, size: 18 })] })],
-        shading: { fill: 'D3D3D3' }
-    })
-]
-});
-
-const doc = new Document({
-sections: [{
-    properties: {
-        page: {
-            size: { orientation: PageOrientation.PORTRAIT },
-            margin: { top: 360, bottom: 360, left: 360, right: 360 } // ≈0.25-inch margins (minimal, printer-friendly)
+async function createImageRuns() {
+    const logoImageRun = new docx.ImageRun({
+        data: await fetch(logoUrl).then(res => res.arrayBuffer()),
+        transformation: { width: 100, height: 100 }
+    });
+    const paymentImageRun = new docx.ImageRun({
+        data: await fetch(paymentUrl).then(res => res.arrayBuffer()),
+        transformation: { width: 300, height: 100 }
+    });
+    return { logoImageRun, paymentImageRun };
 }
-    },
-    children: [
-        // Statement Date centered
-        new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 540 }, // 
-        }),
-        new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-                new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 22 }),
-            ],
-            spacing: { after: 200 }
-        }),
+const { logoImageRun, paymentImageRun } = await createImageRuns();
 
-        // PAY THIS AMOUNT centered
-        new Table({
-            alignment: AlignmentType.CENTER,
-            width: { size: 50, type: WidthType.PERCENTAGE },
-            rows: [new TableRow({
-                children: [new TableCell({
-                    children: [new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        children: [
-                            new TextRun({ text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`, bold: true, size: 24 }),
-                        ],
+    const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+
+    const tableHeader = new TableRow({
+        children: Array.from(document.querySelectorAll('#dataTable thead th')).map(th =>
+            new TableCell({
+                children: [
+                    new Paragraph({
+                        children: [new TextRun({ text: th.innerText, bold: true, size: 18 })],
+                        alignment: AlignmentType.CENTER
+                    }),
+                ],
+                shading: { fill: 'D3D3D3' }
+            })
+        )
+    });
+
+    const tableBody = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(row =>
+        new TableRow({
+            children: Array.from(row.querySelectorAll('td')).map(cell =>
+                new TableCell({
+                    children: [
+                        new Paragraph({
+                            children: [new TextRun({ text: cell.innerText || '', size: 18 })],
+                            alignment: AlignmentType.CENTER
+                        }),
+                    ],
+                })
+            )
+        })
+    );
+
+    const totalRow = new TableRow({
+        children: [
+            ...Array(13).fill(new TableCell({
+                children: [new Paragraph({ text: "" })],
+                shading: { fill: 'D3D3D3' }
+            })),
+            new TableCell({
+                children: [new Paragraph({ children: [new TextRun({ text: "Total", bold: true, size: 18 })] })],
+                shading: { fill: 'D3D3D3' }
+            }),
+            new TableCell({
+                children: [new Paragraph({ children: [new TextRun({ text: `$${balanceOwed.toFixed(2)}`, bold: true, size: 18 })] })],
+                shading: { fill: 'D3D3D3' }
+            })
+        ]
+    });
+
+    const doc = new Document({
+        sections: [{
+            properties: {
+                page: {
+                    size: { orientation: PageOrientation.PORTRAIT },
+                    margin: { top: 360, bottom: 360, left: 360, right: 360 } // ≈0.25-inch margins (minimal, printer-friendly)
+        }
+            },
+            children: [
+                // Statement Date centered
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 540 }, // 
+                }),
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({ text: `Statement Date: ${currentDate}`, bold: true, size: 22 }),
+                    ],
+                    spacing: { after: 200 }
+                }),
+
+                // PAY THIS AMOUNT centered
+                new Table({
+                    alignment: AlignmentType.CENTER,
+                    width: { size: 50, type: WidthType.PERCENTAGE },
+                    rows: [new TableRow({
+                        children: [new TableCell({
+                            children: [new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({ text: `PAY THIS AMOUNT: $${balanceOwed.toFixed(2)}`, bold: true, size: 24 }),
+                                ],
+                            })],
+                            borders: {
+                                top: { style: BorderStyle.SINGLE, size: 6 },
+                                bottom: { style: BorderStyle.SINGLE, size: 6 },
+                                left: { style: BorderStyle.SINGLE, size: 6 },
+                                right: { style: BorderStyle.SINGLE, size: 6 }
+                            },
+                        })],
                     })],
-                    borders: {
-                        top: { style: BorderStyle.SINGLE, size: 6 },
-                        bottom: { style: BorderStyle.SINGLE, size: 6 },
-                        left: { style: BorderStyle.SINGLE, size: 6 },
-                        right: { style: BorderStyle.SINGLE, size: 6 }
-                    },
-                })],
-            })],
-        }),
-        // Add spacing of 3/8 of an inch before the client name
+                }),
+                // Add spacing of 3/8 of an inch before the client name
 new Paragraph({
-alignment: AlignmentType.LEFT,
-spacing: { after: 540 }, // 3/8 inch = 540 twips
+    alignment: AlignmentType.LEFT,
+    spacing: { after: 540 }, // 3/8 inch = 540 twips
 }),
 
-        // Client Name bold, size 12
-    new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 160 },
-            indent: { left: 600 },
-            children: [
-            new TextRun({ text: clientName, size: 24, bold: true }),
-            ],
-        }),
+                // Client Name bold, size 12
+            new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                    new TextRun({ text: clientName, size: 24, bold: true }),
+                    ],
+                }),
 
-        // Street Address bold, size 12
-        new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 160 },
-            indent: { left: 600 },
-            children: [
-                new TextRun({ text: formattedAddressLines[0], size: 24, bold: true }),
-            ],
-        }),
+                // Street Address bold, size 12
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                        new TextRun({ text: formattedAddressLines[0], size: 24, bold: true }),
+                    ],
+                }),
 
-        // City, State, ZIP bold, size 12
-        new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 160 },
-            indent: { left: 600 },
-            children: [
-                new TextRun({ text: formattedAddressLines[1], size: 24, bold: true }),
-            ],
-        }),
+                // City, State, ZIP bold, size 12
+                new Paragraph({
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 160 },
+                    indent: { left: 600 },
+                    children: [
+                        new TextRun({ text: formattedAddressLines[1], size: 24, bold: true }),
+                    ],
+                }),
 // Add spacing of 0.4 inches before the client name
 new Paragraph({
-            alignment: AlignmentType.LEFT,
-            spacing: { after: 540 }, // 
-        }),
-        // Invoice Table
-        new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [tableHeader, ...tableBody, totalRow],
-        }),
-    ],
-}],
-});
+                    alignment: AlignmentType.LEFT,
+                    spacing: { after: 540 }, // 
+                }),
+                // Invoice Table
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [tableHeader, ...tableBody, totalRow],
+                }),
+            ],
+        }],
+    });
 
-Packer.toBlob(doc).then(blob => {
-const url = URL.createObjectURL(blob);
-const link = document.createElement("a");
-link.href = url;
-link.download = `${clientName}_invoice.docx`;
-link.click();
-URL.revokeObjectURL(url);
-});
-}
-
-function updateProgressBar(percentage) {
-const progressBarFill = document.getElementById('progressBarFill');
-progressBarFill.style.width = `${percentage}%`;
-progressBarFill.innerText = `${percentage}%`;
+    Packer.toBlob(doc).then(blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${clientName}_invoice.docx`;
+        link.click();
+        URL.revokeObjectURL(url);
+    });
 }
 </script>
 </body>
