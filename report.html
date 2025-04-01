@@ -92,22 +92,19 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
       const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
 
-      sheets = [];
-      let currentSheetData = [];
-      let firstPageLines = [];
+     sheets = [];
+          let currentSheetData = [];
+          
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-
-        let line = '';
-        let lastY = null;
- 
-           textContent.items.forEach((item) => {
-             if (lastY !== null && Math.abs(item.transform[5] - lastY) > 10) {
-               // Remove specific text but keep the rest of the line
-               line = cleanText(line);
- 
+            let line = '';
+            let lastY = null;
+            textContent.items.forEach((item) => {
+              if (lastY !== null && Math.abs(item.transform[5] - lastY) > 10) {
+                // Clean the current line
+                line = cleanText(line);
                // If the line contains the disclaimer, create a new sheet
                if (line.includes("Disclaimer: Charges/Adjustments made after statement date will appear on your next statement")) {
                  currentSheetData.push([line.trim()]);
@@ -115,55 +112,37 @@ document.getElementById('fileInput').addEventListener('change', async (event) =>
                  currentSheetData = [];
                } else {
                  currentSheetData.push([line.trim()]);
-               }
- 
-               line = '';
-             }
-             line += item.str + ' ';
-             lastY = item.transform[5];
-           });
- 
-           if (line.trim()) {
-             // Remove specific text but keep the rest of the line
-             line = cleanText(line);
- 
-             if (line.includes("Disclaimer: Charges/Adjustments made after statement date will appear on your next statement")) {
-               currentSheetData.push([line.trim()]);
-               sheets.push([...currentSheetData]);
-               currentSheetData = [];
-             } else {
-               currentSheetData.push([line.trim()]);
-             }
            }
-         }
+              }
  
          // If there’s leftover data after the last page, save it as a new sheet
          if (currentSheetData.length > 0) {
            sheets.push([...currentSheetData]);
          }
  
-         console.log('Extracted Sheets:', sheets);
-         if (sheets.length > 0) {
-           alert('PDF data extracted successfully!');
-           document.getElementById('exportExcelBtn').disabled = false;
-         } else {
-           alert('No readable text extracted.');
-         }
-       } catch (error) {
-         console.error('Error extracting PDF data:', error);
-         alert('Failed to extract data. Check the console for details.');
-       }
-     }
-   });
- 
-   function cleanText(text) {
-     // Remove specific text patterns without leaving a gap or inserting "null"
-     text = text.replace(/State\s+of\s+South\s+Dakota\s+Department\s+of\s+Health/gi, '');
-     text = text.replace(/600\s+E\s+Capitol\s+Ave/gi, '');
-     text = text.replace(/Pierre,\s+SD\s+57501/gi, '');
-     return text;
-   }
- 
+console.log('Extracted Sheets:', sheets);
+          if (sheets.length > 0) {
+            alert('PDF data extracted successfully!');
+            document.getElementById('exportExcelBtn').disabled = false;
+            // Optionally, display the extracted data as separate HTML tables:
+            displayTables();
+          } else {
+            alert('No readable text extracted.');
+          }
+        } catch (error) {
+          console.error('Error extracting PDF data:', error);
+          alert('Failed to extract data. Check the console for details.');
+        }
+      }
+    });
+
+    function cleanText(text) {
+      // Remove specific text patterns without leaving gaps
+      text = text.replace(/State\s+of\s+South\s+Dakota\s+Department\s+of\s+Health/gi, '');
+      text = text.replace(/600\s+E\s+Capitol\s+Ave/gi, '');
+      text = text.replace(/Pierre,\s+SD\s+57501/gi, '');
+      return text;
+    }
    function exportToExcel() {
      if (sheets.length === 0) {
        alert('No data to export.');
